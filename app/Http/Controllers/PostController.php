@@ -59,11 +59,13 @@ class PostController extends Controller
      * Display a single active post.
      * Returns 404 if post is draft or scheduled.
      */
-    public function show(int $id): JsonResponse
+    public function show(Post $post): JsonResponse
     {
-        $post = Post::active()->with('user')->findOrFail($id);
+        if (!$post->isPublished()) {
+            abort(404);
+        }
 
-        return response()->json($post);
+        return response()->json($post->load('user'));
     }
 
     /**
