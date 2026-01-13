@@ -92,28 +92,32 @@ describe('posts.create', function () {
 
 describe('posts.store', function () {
     it('requires authentication', function () {
-        $response = $this->post(route('posts.store'), [
+        $response = $this->postJson(route('posts.store'), [
             'title' => 'Test Post',
             'content' => 'Test content',
         ]);
 
-        $response->assertRedirect(route('login'));
+        $response->assertUnauthorized();
     });
 
     it('validates required fields', function () {
-        $response = $this->actingAs($this->user)->post(route('posts.store'), []);
+        $response = $this->actingAs($this->user)->postJson(route('posts.store'), []);
 
-        $response->assertSessionHasErrors(['title', 'content']);
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['title', 'content']);
     });
 
-    it('creates a post with valid data', function () {
-        $response = $this->actingAs($this->user)->post(route('posts.store'), [
+    it('creates a post with valid data and returns 201', function () {
+        $response = $this->actingAs($this->user)->postJson(route('posts.store'), [
             'title' => 'New Post Title',
             'content' => 'New post content here',
             'published_at' => now()->toDateTimeString(),
         ]);
 
-        $response->assertRedirect(route('posts.index'));
+        $response->assertCreated()
+            ->assertJsonPath('title', 'New Post Title')
+            ->assertJsonPath('content', 'New post content here')
+            ->assertJsonPath('user_id', $this->user->id);
 
         $this->assertDatabaseHas('posts', [
             'title' => 'New Post Title',
@@ -123,10 +127,13 @@ describe('posts.store', function () {
     });
 
     it('defaults to draft if is_draft not specified', function () {
-        $this->actingAs($this->user)->post(route('posts.store'), [
+        $response = $this->actingAs($this->user)->postJson(route('posts.store'), [
             'title' => 'Draft Post',
             'content' => 'Content',
         ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('is_draft', true);
 
         $this->assertDatabaseHas('posts', [
             'title' => 'Draft Post',
@@ -207,23 +214,25 @@ describe('posts.update', function () {
     it('requires authentication', function () {
         $post = Post::factory()->create(['user_id' => $this->user->id]);
 
-        $response = $this->put(route('posts.update', $post), [
+        $response = $this->putJson(route('posts.update', $post), [
             'title' => 'Updated Title',
             'content' => 'Updated content',
         ]);
 
-        $response->assertRedirect(route('login'));
+        $response->assertUnauthorized();
     });
 
-    it('allows post author to update', function () {
+    it('allows post author to update and returns 200', function () {
         $post = Post::factory()->create(['user_id' => $this->user->id]);
 
-        $response = $this->actingAs($this->user)->put(route('posts.update', $post), [
+        $response = $this->actingAs($this->user)->putJson(route('posts.update', $post), [
             'title' => 'Updated Title',
             'content' => 'Updated content',
         ]);
 
-        $response->assertRedirect(route('posts.index'));
+        $response->assertOk()
+            ->assertJsonPath('title', 'Updated Title')
+            ->assertJsonPath('content', 'Updated content');
 
         $this->assertDatabaseHas('posts', [
             'id' => $post->id,
@@ -235,7 +244,7 @@ describe('posts.update', function () {
     it('denies update to non-author', function () {
         $post = Post::factory()->create(['user_id' => $this->user->id]);
 
-        $response = $this->actingAs($this->otherUser)->put(route('posts.update', $post), [
+        $response = $this->actingAs($this->otherUser)->putJson(route('posts.update', $post), [
             'title' => 'Updated Title',
             'content' => 'Updated content',
         ]);
@@ -246,9 +255,10 @@ describe('posts.update', function () {
     it('validates required fields', function () {
         $post = Post::factory()->create(['user_id' => $this->user->id]);
 
-        $response = $this->actingAs($this->user)->put(route('posts.update', $post), []);
+        $response = $this->actingAs($this->user)->putJson(route('posts.update', $post), []);
 
-        $response->assertSessionHasErrors(['title', 'content']);
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['title', 'content']);
     });
 });
 
@@ -256,15 +266,15 @@ describe('posts.destroy', function () {
     it('requires authentication', function () {
         $post = Post::factory()->create(['user_id' => $this->user->id]);
 
-        $response = $this->delete(route('posts.destroy', $post));
+        $response = $this->deleteJson(route('posts.destroy', $post));
 
-        $response->assertRedirect(route('login'));
+        $response->assertUnauthorized();
     });
 
-    it('allows post author to delete', function () {
+    it('allows post author to delete and returns 204', function () {
         $post = Post::factory()->create(['user_id' => $this->user->id]);
 
-        $response = $this->actingAs($this->user)->delete(route('posts.destroy', $post));
+        $response = $this->actingAs($this->user)->deleteJson(route('posts.destroy', $post));
 
         $response->assertNoContent();
 
@@ -274,7 +284,7 @@ describe('posts.destroy', function () {
     it('denies delete to non-author', function () {
         $post = Post::factory()->create(['user_id' => $this->user->id]);
 
-        $response = $this->actingAs($this->otherUser)->delete(route('posts.destroy', $post));
+        $response = $this->actingAs($this->otherUser)->deleteJson(route('posts.destroy', $post));
 
         $response->assertForbidden();
 
