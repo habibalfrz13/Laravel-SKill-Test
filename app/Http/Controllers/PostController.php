@@ -7,7 +7,6 @@ use App\Http\Requests\UpdatePostRequest;
 use App\Models\Post;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
 
 class PostController extends Controller
@@ -41,33 +40,28 @@ class PostController extends Controller
      * Store a newly created post.
      * Only authenticated users can create posts.
      */
-    public function store(StorePostRequest $request): RedirectResponse
+    public function store(StorePostRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $validated['user_id'] = auth()->id();
+        $validated['user_id'] = $request->user()->id;
         
         // Default to draft if not specified
         if (!isset($validated['is_draft'])) {
             $validated['is_draft'] = true;
         }
 
-        Post::create($validated);
+        $post = Post::create($validated);
 
-        return redirect()->route('posts.index')->with('success', 'Post created successfully.');
+        return response()->json($post, 201);
     }
 
     /**
      * Display a single active post.
      * Returns 404 if post is draft or scheduled.
      */
-    public function show(Post $post): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        // Return 404 if post is not published (draft or scheduled)
-        if (!$post->isPublished()) {
-            abort(404);
-        }
-
-        $post->load('user');
+        $post = Post::active()->with('user')->findOrFail($id);
 
         return response()->json($post);
     }
@@ -87,11 +81,11 @@ class PostController extends Controller
      * Update the specified post.
      * Only the post author can update.
      */
-    public function update(UpdatePostRequest $request, Post $post): RedirectResponse
+    public function update(UpdatePostRequest $request, Post $post): JsonResponse
     {
         $post->update($request->validated());
 
-        return redirect()->route('posts.index')->with('success', 'Post updated successfully.');
+        return response()->json($post);
     }
 
     /**
@@ -107,3 +101,4 @@ class PostController extends Controller
         return response()->noContent();
     }
 }
+
